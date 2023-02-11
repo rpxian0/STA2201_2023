@@ -1,0 +1,368 @@
+---
+title: "Applied Statistics II HW1
+STA2201S Winter 2023"
+output:
+  pdf_document: default
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+library(ggplot2)
+library(tidyverse)
+library(dplyr)
+library(readxl)
+library(MASS)
+
+knitr::opts_chunk$set(echo=TRUE,
+                      opts=list(width.cutoff=60),
+                      tidy=TRUE,
+                      fig.width=unit(10,"cm"),
+                      fig.asp=0.5,
+                      fig.align = "center")
+```
+
+## 1 Overdispersion
+
+**a)** The conditional distribution $Y|\theta \sim \text{Pois}(\mu\theta)$ results in $E(Y|\theta) = \mu\theta$, $\text{Var}(Y|\theta) = \mu\theta$. Using the laws of total expectation and variance,
+\begin{align}
+    E(Y) &= E(E(Y|\theta)) = E(\mu\theta) \nonumber\\
+    &= \mu E(\theta) = \mu \\
+    \text{Var}(Y) &= E(\text{Var}(Y|\theta)) + \text{Var}(E(Y|\theta)) \nonumber\\
+    &= E(\mu\theta) + \text{Var}(\mu\theta) \nonumber\\
+    &= \mu \cdot 1 + \mu^2\sigma^2 \nonumber\\
+    &= \mu(1 + \mu\sigma^2)
+\end{align}
+$$\\[0.1em]$$
+**b)** When $\theta \sim \text{Gamma}(\alpha, \beta)$, the marginal distribution of $Y$ is, according to the definition,
+\begin{align}
+    p(Y) &= \int p(Y|\theta)p(\theta) d\theta \nonumber\\
+    &= \int \text{Pois}(\mu\theta) \text{Gamma}(\theta; \alpha, \beta) d\theta \nonumber\\
+    &= \int \frac{e^{-\mu\theta}(\mu\theta)^k}{k!} \cdot \frac{\theta^{\alpha-1}e^{-\beta\theta}\beta^{\alpha}}{\Gamma(\alpha)} d\theta \nonumber\\
+    &= \frac{\mu^k\beta^{\alpha}}{\Gamma(\alpha)k!} \int \theta^{\alpha+k-1} e^{-(\mu + \beta)\theta} d\theta
+\end{align}
+Let $t = (\mu + \beta)\theta$, $z = \alpha+k$, so $d\theta = dt/(\mu + \beta)$. Use the definition of the Gamma function,
+$\Gamma(z) = \int t^{z-1}e^{-t} dt$, we can simplify $p(Y)$.
+\begin{align}
+    p(Y) &= \frac{\mu^k\beta^{\alpha}}{\Gamma(\alpha)k!} \int \left( \frac{t}{\mu + \beta} \right)^{z-1}e^{-t} \frac{dt}{\mu + \beta} \nonumber\\
+    &= \frac{1}{\Gamma(\alpha)k!} \cdot \frac{\mu^k\beta^{\alpha}}{(\mu + \beta)^{\alpha+k}} \int t^{z-1}e^{-t} dt \nonumber\\
+    &= \frac{\Gamma(\alpha+k)}{\Gamma(\alpha)k!} \cdot \left(\frac{\beta}{\mu + \beta}\right)^{\alpha} \cdot \left(\frac{\mu}{\mu + \beta}\right)^{k}
+\end{align}
+Let $p = \frac{\beta}{\mu + \beta}$, therefore $\frac{\mu}{\mu + \beta} = 1-p$, then $p(Y)$ can be further simplified to,
+\begin{align}
+    p(Y) &= \frac{\Gamma(\alpha+k)}{\Gamma(\alpha)k!} p^{\alpha} (1-p)^{k} \nonumber\\
+    &\sim \text{NB}(\alpha, p)
+\end{align}
+It is a negative binomial (NB) distribution with parameters $\alpha$ and $p$.
+$$\\[0.1em]$$
+**c)** Let $E(Y) = \mu$ and $\text{Var}(Y) = \mu(1 + \mu\sigma^2)$, then using the properties of the NB distribution,
+\begin{align}
+    E(Y) &= \frac{\alpha(1-p)}{p} = \mu  \label{eq:ey} \\
+    \text{Var}(Y) &= \frac{\alpha(1-p)}{p^2} = \mu(1 + \mu\sigma^2) \\
+    \frac{E(Y)}{\text{Var}(Y)} &= p = \frac{1}{1 + \mu\sigma^2} \label{eq:pus}
+\end{align}
+From \textbf{b)} we know that,
+\begin{equation}
+    p = \frac{\beta}{\mu + \beta} = \frac{1}{1 + \mu/\beta}
+    \label{eq:pb}
+\end{equation}
+Therefore, comparing Eqs. \eqref{eq:pus} and \eqref{eq:pb}, we find that $\beta=1/\sigma^2$. Then from Eq. \eqref{eq:ey},
+\begin{align}
+    \alpha \cdot \frac{\mu/(\mu + \beta)}{\beta/(\mu + \beta)} &= \frac{\mu}{\beta} = \mu \nonumber\\
+    % \alpha\beta^{-1} &= \alpha \cdot \mu\sigma^2 = \mu \nonumber\\
+    \alpha &= \beta = \frac{1}{\sigma^2}
+\end{align}
+Therefore, the Gamma distribution that satisfies the required form of the expected value and variance is $\text{Gamma}(1/\sigma^2, 1/\sigma^2)$.
+
+## 2 Hurricanes
+
+Loading the data from the hurricane paper,
+
+```{r, include=FALSE}
+hurricanes <- read_excel("E:/2022/UoT_stats/STA2201_AppStatsII/homeworks/pnas.1402786111.sd01.xlsx")
+hurricanes <- drop_na(hurricanes)
+```
+```{r}
+head(hurricanes, 3)
+```
+
+**a)** Visualization
+
+Masculinity-femininity index (MFI) vs deaths
+
+```{r}
+# MFI vs hurricane-caused deaths
+hurricanes %>%
+  ggplot(aes(x=MasFem, y=alldeaths,
+             color=as.factor(Gender_MF))) +
+             geom_point() + labs(color='Gender') +
+              scale_color_manual(labels = c("Male", "Female"),
+                                 values = c("red", "blue"))
+```
+
+Minimum pressure of the hurricane vs deaths
+
+```{r}
+# Minimum pressure of the hurricane vs hurricane-caused deaths
+hurricanes %>%
+  ggplot(aes(x=ZMinPressure_A, y=alldeaths, 
+            color=as.factor(Gender_MF))) +
+            geom_point() + labs(color='Gender') +
+            scale_color_manual(labels = c("Male", "Female"),
+                                 values = c("red", "blue"))
+```
+
+Normalized damage (on log scale) vs deaths
+
+```{r}
+# Normalized damage vs hurricane-caused deaths
+hurricanes %>%
+  ggplot(aes(x=log(NDAM), y=alldeaths, 
+            color=as.factor(Gender_MF))) +
+            geom_point() + labs(color='Gender') +
+            scale_color_manual(labels = c("Male", "Female"),
+                                 values = c("red", "blue"))
+```
+
+The log scale is used on the third graph to reduce the effects of the
+extreme outliers. All three graphs show similar distributions between
+hurricanes with particularly masculine and feminine names (as used in
+the color). The hurricanes with more feminine names have a few more
+extreme outliers (about 4) than those with more masculine names.
+
+$$\\[0.1em]$$
+**b)** Poisson regression and overdispersion check
+
+```{r}
+poisson_fit <- glm(alldeaths~MasFem, data=hurricanes,
+                   family="poisson")
+summary(poisson_fit)
+```
+
+Assessment of overdispersion by checking for the mean and the variance.
+
+```{r}
+h_mean <- mean(hurricanes$alldeaths, na.rm=TRUE)
+h_var <- var(hurricanes$alldeaths, na.rm=TRUE)
+sprintf("Mean is %f, variance is %f", h_mean, h_var)
+```
+
+Variance \> mean, there is overdispersion. Fit the GLM using
+quasi-poisson distribution.
+
+```{r}
+quasipoisson_fit <- glm(alldeaths~MasFem, data=hurricanes,
+                        family="quasipoisson")
+summary(quasipoisson_fit)
+```
+
+$$\\[0.1em]$$
+**c)** Reproduce Model 4 from the paper
+
+Model 4 fits the data to a GLM with negative binomial distribution using
+the following explanatory variables: minimum pressure (ZMinPressure_A),
+normalized damage (ZNDAM), MFI (ZMasFem), MFI × minimum pressure
+(ZMasFem × ZMinPressure_A), MFI × normalized damage (ZMasFem × ZNDAM).
+
+```{r}
+negbin_fit <- MASS::glm.nb(alldeaths~ZMinPressure_A + ZNDAM +
+                       ZMasFem + ZMasFem:ZMinPressure_A +
+                       ZMasFem:ZNDAM, data=hurricanes)
+summary(negbin_fit)
+```
+
+```{r}
+coeffs <- negbin_fit$coefficients
+median_pressure <- median(hurricanes$ZMinPressure_A, na.rm=TRUE)
+median_ndam <- median(hurricanes$ZNDAM, na.rm=TRUE)
+fem_affect = coeffs['ZMasFem'] + coeffs['ZMinPressure_A:ZMasFem']*median_pressure + coeffs['ZNDAM:ZMasFem']*median_ndam
+fem_affect
+```
+
+Assuming a hurricane with median pressure and damage ratings, a decrease by one of the MFI leads to a decrease of deaths on log scale of about 0.163.
+
+$$\\[0.1em]$$
+**d)** Death prediction for Hurricane Sandy
+
+Use Model 4 (`negbin_fit`) to predict the number of deaths from Hurricane Sandy.
+
+```{r, echo = TRUE}
+sandy = hurricanes %>% filter(Name == "Sandy")
+predict.glm(negbin_fit, newdata=sandy %>%
+              dplyr::select(ZMinPressure_A, ZNDAM, ZMasFem),
+              type="response")
+```
+
+The predicted deaths from Hurricane Sandy is huge, but the actual
+reported death from Hurricane Sandy is
+
+```{r}
+sandy$alldeaths
+```
+
+The fitted model (without Sandy) significantly overestimate the deaths, since Hurricane Sandy is an outlier (although not as extreme as Hurricane Katrina or Aubrey) and therefore isn't fit well by the model.
+
+$$\\[0.1em]$$
+**e)** Appraisal of the paper
+
+**Strengths**:
+
+(1) One highlight of the paper is the empirically constructed MFI for (hurricane) names by using survey of volunteer opinions. Since some names may have an unclear gender assignment (e.g. Ashley, Leslie, Sam, etc), pooling opinions from a number of people increases the limitation of binary gender assignment for names.
+
+(2) The authors conducted a number of variable selection methods, including choosing which higher-order features (i.e. interaction terms) to keep, before finalizing the structure of the model.
+
+**Weaknesses**:
+
+(1) The types of explanatory variables for the model is
+limited. Regarding the information about the hurricane damage on land, the main missing factors are the geographical region that the hurricane hits, including the size, population density, maximum wind speed, rainfall dat, etc. These information is absent from the features and they can naturally be included in the GLM.
+
+(2) The authors implicitly chose the hurricanes that landed on the continent. Some hurricanes not landed are also given anthropomorphic names, since the naming is decided much earlier than landfall. Moreover, hurricane names are often reused and only those that caused significant damages are not reused. These aspect likely complicates the data and modelling process, yet neither of which was discussed by the authors.
+
+(3) In terms of the distributional assumption, the authors may consider inclusion of extreme statistical models that better account for the tail of the distribution. 
+
+$$\\[0.1em]$$
+**f)** Opinions about the results
+
+Although this paper does raise an interesting point in considering the
+implicit bias in gender-based naming and in media reporting, I'm not convinced that the results fully justify the main argument from the paper as is also the title. First of all, the argument seems to have inherent flaws since the death counting method (indirect and direct) suggests a more nuanced link between the casualties and the impact of the hurricane, which is not yet fully explored in the paper. What the authors can also do is to use a hypothesis testing framework to examine the difference in distributions between deaths and damages from hurricanes of differently gendered names. As has been discussed at the EDA stage earlier, this difference seems minute, if at all present beyond the extreme outliers, according to visual inspection.
+
+The authors merged the data before and after 1979 to improve the statistical power, but the hurricane naming system was altered in these two time periods, which may not justify this treatment. For small datasets such as analyzed in this paper, improving the statistical power can also be achieved by the collection of more data, which in this context refers to the varieties of quantifiers of hurricane-caused destruction. Deaths and dollar-valued damages are the only two quantifiers used here. These variables are in their aggregated form, although their breakdown seems to be available, and that they are inherently heterogeneous (e.g. indirect and direct deaths or damage). The simplest way to improve the argument of the paper is therefore to use the constituent values of these variables to fit a more elaborate model. In addition, taking into consideration of other (currently ignored) covariates, as mentioned earlier in e), can also increase the statistical power and model robustness.
+
+$$\\[0.5em]$$
+## 3 Vaccinations
+
+Loading the covid-19 vaccination data
+
+```{r, include=FALSE}
+vax = read_csv("./vax.csv")
+```
+```{r}
+head(vax, 3)
+```
+
+Load the acs data
+
+```{r, include=FALSE}
+acs = read_csv("./acs.csv") %>% pivot_wider(names_from = variable)
+```
+```{r}
+head(acs, 3)
+```
+
+Join the two datasets by the county names, followed by some data cleaning
+
+```{r}
+county_data <- vax %>% merge(acs, by.x = "FIPS", by.y = "fips")
+# Clean the 18+ vaccinated population data
+county_data$Series_Complete_18Plus = county_data$Series_Complete_18Plus %>% str_remove_all(",") %>% as.integer()
+# Calculate vaccination rate
+county_data$vax_rate = with(county_data, Series_Complete_18Plus / total_pop_18plus)
+county_data = county_data %>% filter(vax_rate <= 1)
+
+## Not printing because output is quite long
+#head(county_data, 3)
+```
+$$\\[0.1em]$$
+
+**a)** Exploratory data analysis
+
+The following plots show the distribution of the vaccination rates in the age 18+ population over counties and its relationship to several variables present in the census data, including education level, foreign born proportion, median income, health insurance coverage, employment status, ethnicity, and median age.
+
+```{r, fig.show="hold", out.width="45%"}
+par(mfrow = c(2, 2), mai = c(0.9, 0.9, 0.2, 0.2))
+theme_large_text <- theme(axis.text=element_text(size=15), axis.title=element_text(size=15))
+
+county_data %>% ggplot(aes(x=vax_rate*100)) + 
+  geom_histogram(bins=50, color="black", fill="orange") + labs(x='Proportion of age 18+ population who are vaccinated (%)',
+    y='County count') + xlim(0, 100) + theme_large_text
+
+county_data %>% ggplot(aes(x=prop_bachelor_above*100,
+                           y=vax_rate)) + geom_point(stroke=0.5) + labs(x='Proportion of people with post-secondary education (%)', y='Vaccination rate') + xlim(0, 100) + theme_large_text
+
+county_data %>% ggplot(aes(x=prop_foreign_born*100,
+                           y=vax_rate)) + geom_point(stroke=0.5) + labs(x='Proportion of foreign-born population (%)', y='Vaccination rate') + xlim(0, 100) + theme_large_text
+
+county_data %>% ggplot(aes(x=median_income/1000,
+                           y=vax_rate)) + geom_point(stroke=0.5) + labs(x='Median income ($1000)', y='Vaccination rate') + xlim(0, 150) + theme_large_text
+
+```
+
+```{r, fig.show="hold", out.width="45%"}
+par(mfrow = c(1, 2), mai = c(0.9, 0.9, 0.2, 0.2))
+county_data %>% ggplot(aes(x=prop_health_insurance*100,
+                           y=vax_rate)) + geom_point(stroke=0.5) + labs(x='Proportion of people with health insurance (%)', y='Vaccination rate') + theme_large_text
+
+county_data %>% ggplot(aes(x=prop_unemployed*100,
+                           y=vax_rate)) + geom_point(stroke=0.5) + labs(x='Proportion of unemployed people (%)', y='Vaccination rate') + theme_large_text
+```
+```{r, fig.show="hold", out.width="45%"}
+par(mfrow = c(1, 2), mai = c(0.9, 0.9, 0.2, 0.2))
+county_data %>% ggplot(aes(x=prop_white*100,
+                           y=vax_rate)) + geom_point(stroke=0.5) + labs(x='Proportion of ethnically white people (%)', y='Vaccination rate') + theme_large_text
+
+county_data %>% ggplot(aes(x=median_age,
+                           y=vax_rate)) + geom_point(stroke=0.5) + labs(x='Median age of population (yo)', y='Vaccination rate') + theme_large_text
+```
+
+```{r}
+vr_mean <- mean(county_data$vax_rate, na.rm=TRUE)
+vr_var <- var(county_data$vax_rate, na.rm=TRUE)
+sprintf("Mean is %f, variance is %f", vr_mean, vr_var)
+```
+The vaccination rate data doesn't exhibit overdispersion
+
+$$\\[0.1em]$$
+
+**b)** Regression model at the county level for vaccination rates of people aged 18+
+
+Build a GLM using the county-level explanatory variables such as the proportion of people who received post-secondary level of education (`prop_bachelor_above`), of people who has health insurance (`prop_health_insurance`), and people's median income (`median_income`). These variables positively correlate with the vaccination rates as found in the EDA.
+
+```{r}
+vax_gau_fit <- glm(vax_rate ~ prop_bachelor_above + prop_health_insurance + median_income, data = county_data, family = 'gaussian')
+summary(vax_gau_fit)
+```
+```{r}
+pred_gau_vax_rate <- predict(vax_gau_fit)
+ggplot(county_data, aes(x=prop_bachelor_above*100, y=vax_rate)) + geom_point(stroke=0.5) +
+labs(x='Proportion of people with post-secondary education (%)', y='Vaccination rate') + xlim(0, 100) +
+theme_large_text +
+geom_line(aes(y = pred_gau_vax_rate), linewidth = 1, color = "red")
+```
+
+$$\\[0.1em]$$
+**c)** Model prediction for Ada County, Idaho
+
+```{r}
+glm_pred <- predict.glm(vax_gau_fit, county_data %>% filter(county_name == "Ada County, Idaho"), type = "response")
+
+ada_value <- county_data %>% filter(county_name == "Ada County, Idaho") %>% dplyr::select(vax_rate)
+
+sprintf("Vaccination rate for Ada county predicted by the GLM is %f, and the true value is %f", glm_pred, ada_value)
+```
+
+$$\\[0.1em]$$
+**d)** Summary of analysis
+
+A GLM was built to predict county-level vaccination rate (continuous random variable valued between 0 and 1) using census data. The initial EDA show a few variables with county-level information that positively correlates with the vaccination rates in the age 18+ population. These variables concern the education history and socioeconomic status of the county-level population. The GLM was used to predict the vaccination rate of residents of Ada County, Idaho, and the result shows good agreement with the actual value.
+
+$$\\[0.1em]$$
+**e)** Potential outcomes from alternative models
+
+1)  Regression at the state level, outcome used is the total population
+    18+ fully vaccinated
+    
+    The model needs the age 18+ population of each state as a covariate. Otherwise, states similar in total population distribution but different in the proportion of the age 18+ population would be indistinguishable.
+
+2)  Regression at the state level, outcome used is the average of the
+    county level full vaccination rates of 18+ population
+    
+    The model can make use of average vaccination rate at the state level over its constituent counties. It needs less granular information than 1) and 3). 
+
+3)  Regression at the county level, outcome used is the total population
+    18+ fully vaccinated, and include as a covariate a categorical
+    variable (fixed effect) which indicates which state a county is in.
+    
+    The model would require the total population of each county as covariates. The same reasoning in 1) applies here.
+    
+    
